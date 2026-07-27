@@ -1,1 +1,1018 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Tuğba Gürüz - YKS 2027 Simülasyonu</title>
+    <style>
+        /* ==========================================================================
+           GENEL AYARLAR VE SIFIRLAMALAR
+           ========================================================================== */
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; }
+        html { height: 100%; height: 100dvh; overflow: hidden; overscroll-behavior: none; -webkit-text-size-adjust: none; text-size-adjust: none; }
+        body { background: #111; color: white; display: flex; flex-direction: column; height: 100vh; height: 100dvh; width: 100vw; overflow: hidden; overscroll-behavior: none; position: fixed; inset: 0; }
+
+        /* ==========================================================================
+           ÜST KAYAN YAZI BANDI (CEHENNEM KIRMIZISI + ALTIN SARISI)
+           ========================================================================== */
+        #top-banner {
+            width: 100%; height: clamp(24px, 5vh, 32px); flex-shrink: 0;
+            background: linear-gradient(90deg, #6b0000, #ff0000, #f1c40f, #ff0000, #6b0000);
+            background-size: 400% 100%; animation: bannerGlow 6s linear infinite;
+            display: flex; align-items: center; overflow: hidden; position: relative;
+            border-bottom: 2px solid #f1c40f; z-index: 70; padding-top: env(safe-area-inset-top);
+        }
+        @keyframes bannerGlow { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+        #top-banner-track { display: flex; align-items: center; white-space: nowrap; animation: marqueeScroll 30s linear infinite; will-change: transform; }
+        .banner-item { font-weight: 900; font-size: clamp(0.7rem, 2.1vw, 0.95rem); color: #fff; text-shadow: 0 0 6px #000, 0 0 10px #ff0000; letter-spacing: 1px; padding-right: 80px; }
+        @keyframes marqueeScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        
+        /* OYUN ALANI */
+        #game-area {
+            position: relative; width: 100%; flex: 1; min-height: 0;
+            background: #2c3e50 url('mother.jpeg') center/cover no-repeat;
+            border: 4px solid #1a252f; overflow: hidden;
+        }
+
+        /* ==========================================================================
+           ARAYÜZ (HUD) VE GÖSTERGELER
+           ========================================================================== */
+        #hud {
+            position: absolute; top: calc(15px + env(safe-area-inset-top)); left: calc(15px + env(safe-area-inset-left)); 
+            background: rgba(0,0,0,0.85); border: 2px solid #f1c40f; padding: clamp(10px, 2.5vw, 15px); border-radius: 12px; z-index: 50; 
+            width: clamp(200px, 62vw, 280px); box-shadow: 0 0 15px rgba(241, 196, 15, 0.3);
+        }
+        .hud-line { margin-bottom: 8px; font-weight: bold; font-size: clamp(0.8rem, 2.6vw, 1.05rem); display: flex; justify-content: space-between; gap: 6px; }
+        .hud-line span { color: #f1c40f; }
+        .energy-bar-bg { background: #555; height: clamp(14px, 3vw, 20px); border-radius: 10px; overflow: hidden; margin-top: 5px; border: 1px solid #fff; }
+        #energy-fill { background: #2ecc71; height: 100%; width: 100%; transition: width 0.3s, background 0.3s; }
+        
+        /* ETKİLEŞİM BUTONU */
+        #interact-btn {
+            position: absolute; bottom: calc(20px + env(safe-area-inset-bottom)); right: calc(20px + env(safe-area-inset-right));
+            background: #f1c40f; color: #000; font-size: clamp(0.95rem, 3vw, 1.5rem); font-weight: bold;
+            padding: clamp(12px, 3vw, 20px) clamp(18px, 5vw, 40px); border: 4px solid #fff; border-radius: 15px;
+            cursor: pointer; z-index: 60; display: none; box-shadow: 0 10px 20px rgba(0,0,0,0.6);
+            animation: pulse 1s infinite alternate; max-width: 80vw; touch-action: manipulation;
+        }
+        @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.05); } }
+
+        /* ==========================================================================
+           MOBİL JOYSTICK
+           ========================================================================== */
+        #joystick-zone {
+            position: absolute; bottom: calc(20px + env(safe-area-inset-bottom)); left: calc(20px + env(safe-area-inset-left)); 
+            width: clamp(100px, 26vw, 150px); height: clamp(100px, 26vw, 150px);
+            background: rgba(255,255,255,0.1); border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; z-index: 50; display: flex; justify-content: center; align-items: center; touch-action: none;
+        }
+        #joystick-knob { width: 40%; height: 40%; background: rgba(241, 196, 15, 0.8); border-radius: 50%; position: absolute; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+
+        /* ==========================================================================
+           ODADAKİ NESNELER
+           ========================================================================== */
+        .game-object {
+            position: absolute; border-radius: 15px; display: flex; flex-direction: column; 
+            justify-content: center; align-items: center; font-weight: bold; font-size: 1.3rem;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5); text-align: center; color: white; border: 4px solid rgba(255,255,255,0.2);
+        }
+        #bed { top: 40px; right: 30px; width: clamp(110px, 26vw, 160px); height: clamp(170px, 34vh, 260px); background: #3498db; border-color: #2980b9; font-size: clamp(0.9rem, 2.5vw, 1.3rem); }
+        #desk { bottom: 40px; left: 50%; transform: translateX(-50%); width: clamp(200px, 60vw, 280px); height: clamp(100px, 20vh, 140px); background: #e67e22; border-color: #d35400; align-items: flex-end; padding: 10px; font-size: clamp(0.9rem, 2.5vw, 1.3rem); }
+        #door { bottom: 30px; right: 20px; width: clamp(140px, 40vw, 190px); height: clamp(110px, 22vh, 150px); background: #8e44ad; border-color: #732d91; display:flex; align-items:center; justify-content:center; font-size: clamp(1.2rem, 3.5vw, 1.8rem);}
+        
+        /* YUKARI ORTAYA SABİTLENMİŞ MUTFAK */
+        #kitchen { top: 40px; left: 50%; transform: translateX(-50%); width: clamp(120px, 30vw, 180px); height: clamp(100px, 20vh, 150px); background: #27ae60; border-color: #2ecc71; font-size: clamp(0.9rem, 2.5vw, 1.3rem); }
+
+        #milk { position: absolute; top: -30px; left: 10px; background: #795548; border: 2px solid #3e2723; padding: 5px 10px; border-radius: 5px; font-size: clamp(0.8rem, 2vw, 1rem); z-index: 5;}
+        #phone-obj { position: absolute; bottom: 20px; right: 20px; background: #333; width: clamp(22px, 5vw, 30px); height: clamp(38px, 8vw, 50px); border-radius: 5px; border: 2px solid #555; }
+        
+        #black-cat { top: 100px; left: 100px; width: clamp(60px, 14vw, 80px); height: clamp(60px, 14vw, 80px); border-radius: 50%; border: 3px solid #000; background-size: cover; background-position: center; background-image: url('karakedi.jpeg'); z-index: 20; animation: catGlow 2s infinite alternate;}
+        @keyframes catGlow { from { box-shadow: 0 0 10px #c0392b; } to { box-shadow: 0 0 25px #ff0000; } }
+
+        /* ==========================================================================
+           KARAKTER VE YEĞENLER 
+           ========================================================================== */
+        #player { position: absolute; width: clamp(60px, 14vw, 90px); height: clamp(60px, 14vw, 90px); z-index: 25; display: flex; justify-content: center; align-items: flex-end; }
+        #player-avatar { width: 100%; height: 100%; border-radius: 50%; border: 4px solid #f1c40f; background-image: url('tugba.jpeg'); background-size: cover; background-position: center; background-color: #f1c40f; box-shadow: 0 10px 20px rgba(0,0,0,0.5); transition: transform 0.1s; }
+        .name-tag { background: rgba(0,0,0,0.8); color: #fff; padding: 3px 10px; font-size: clamp(0.65rem, 2vw, 0.85rem); border-radius: 5px; position: absolute; top: -25px; white-space: nowrap; border: 1px solid #f1c40f; font-weight: bold;}
+
+        #tablet-hint { position: absolute; top: -55px; left: 50%; transform: translateX(-50%); font-size: clamp(1.4rem, 4vw, 1.8rem); display: none; animation: tabletBounce 0.7s infinite alternate; filter: drop-shadow(0 0 6px rgba(255,255,255,0.6)); }
+        @keyframes tabletBounce { from { transform: translateX(-50%) translateY(0); } to { transform: translateX(-50%) translateY(-8px); } }
+        
+        .kid { position: absolute; width: clamp(42px, 11vw, 60px); height: clamp(42px, 11vw, 60px); border-radius: 50%; border: 3px solid #c0392b; background-color: #e74c3c; z-index: 24; display: flex; justify-content: center; align-items: center; font-size: clamp(0.6rem, 2vw, 0.75rem); font-weight: bold; text-align: center; box-shadow: 0 5px 10px rgba(0,0,0,0.5); display: none; }
+        .kid { background-size: cover; background-position: center; text-shadow: 0 0 4px #000, 0 0 6px #000; }
+        #kid1 { border-color: #27ae60; background-color: #2ecc71; background-image: url('erto.jpeg'); }
+        #kid2 { border-color: #2980b9; background-color: #3498db; background-image: url('murat.jpeg'); }
+        #kid3 { border-color: #d35400; background-color: #e67e22; background-image: url('cio.jpeg'); }
+
+        /* ==========================================================================
+           AÇILIR PENCERELER (MODALLAR) VE TYT EKRANI
+           ========================================================================== */
+        .modal-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; display: flex; justify-content: center; align-items: center; padding: 15px; }
+        .hidden { display: none !important; }
+        .modal-box { background: #222; border: 4px solid #f1c40f; border-radius: 20px; padding: clamp(15px, 4vw, 30px); width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; text-align: center; box-shadow: 0 0 50px rgba(0,0,0,0.8); touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+        .modal-box h2 { color: #f1c40f; margin-bottom: 20px; font-size: clamp(1.3rem, 4.5vw, 2rem); border-bottom: 2px solid #444; padding-bottom: 10px;}
+        .modal-box p { font-size: clamp(0.95rem, 3vw, 1.2rem); line-height: 1.5; margin-bottom: 20px;}
+        .btn { background: #3498db; color: white; padding: clamp(12px, 3vw, 15px) clamp(18px, 4vw, 25px); border: none; border-radius: 10px; font-size: clamp(0.95rem, 3vw, 1.2rem); cursor: pointer; margin: 8px 5px; font-weight: bold; transition: 0.2s; touch-action: manipulation;}
+        .btn:hover { background: #2980b9; transform: scale(1.05); }
+        .btn-red { background: #e74c3c; } .btn-red:hover { background: #c0392b; }
+        .btn-green { background: #27ae60; } .btn-green:hover { background: #2ecc71; }
+
+        .app-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(10px, 3vw, 20px); margin-top: 20px; }
+        .app-btn { background: #333; border: 2px solid #555; padding: clamp(18px, 4vw, 30px) 10px; border-radius: 15px; color: white; cursor: pointer; font-weight: bold; font-size: clamp(1rem, 3vw, 1.2rem); touch-action: manipulation;}
+        .app-btn:hover { filter: brightness(1.2); }
+
+        .inv-status { display: flex; justify-content: space-around; background: #111; padding: 15px; border-radius: 10px; border: 2px solid #555; margin-bottom: 20px; font-weight: bold;}
+        .order-row { display: flex; justify-content: space-between; align-items: center; background: #333; padding: 10px 15px; border-radius: 10px; margin-bottom: 10px;}
+
+        /* TYT MATEMATİK CSS (GERİ GELDİ) */
+        #tyt-question-text { font-size: clamp(1.05rem, 3.2vw, 1.4rem); font-weight: bold; background: #333; padding: clamp(14px, 3vw, 20px); border-radius: 10px; margin-bottom: 20px; border: 2px solid #555;}
+        .tyt-option { display: block; width: 100%; background: #2c3e50; border: 2px solid #34495e; padding: clamp(10px, 3vw, 15px); margin-bottom: 10px; border-radius: 10px; font-size: clamp(1rem, 3vw, 1.2rem); cursor: pointer; font-weight: bold; transition: 0.2s; touch-action: manipulation;}
+        .tyt-option:hover { background: #34495e; border-color: #f1c40f; }
+
+        /* İPAD / MİNECRAFT PANELİ */
+        #ipad-panel { position: absolute; top: min(300px, 38vh); left: 15px; width: clamp(200px, 65vw, 280px); background: #111; border: 4px solid #444; border-radius: 20px; padding: clamp(10px, 3vw, 15px); z-index: 55; box-shadow: 0 0 20px rgba(0,0,0,0.7); animation: slideIn 0.4s ease-out; max-height: 55vh; overflow: hidden; }
+        @keyframes slideIn { from { transform: translateY(-30px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+        #ipad-title { text-align: center; font-weight: bold; color: #2ecc71; margin-bottom: 10px; font-size: clamp(0.9rem, 3vw, 1.1rem); }
+        #minecraft-screen { height: clamp(110px, 20vh, 170px); border-radius: 10px; position: relative; overflow: hidden; border: 3px solid #333; background: repeating-linear-gradient(45deg, #6b8e3d, #6b8e3d 20px, #5a7a34 20px, #5a7a34 40px); }
+        .mc-kid { position: absolute; width: clamp(30px, 8vw, 42px); height: clamp(30px, 8vw, 42px); border-radius: 8px; border: 2px solid #fff; background-size: cover; background-position: center; box-shadow: 0 4px 8px rgba(0,0,0,0.5); animation: mcBob 1.4s ease-in-out infinite alternate; }
+        #mc-kid-1 { left: 15%; top: 20%; background-color:#2ecc71; animation-delay: 0s; } #mc-kid-2 { left: 45%; top: 50%; background-color:#3498db; animation-delay: 0.3s; } #mc-kid-3 { left: 68%; top: 15%; background-color:#e67e22; animation-delay: 0.6s; }
+        @keyframes mcBob { from { transform: translateY(0px); } to { transform: translateY(-8px); } }
+        #ipad-footer { margin-top: 10px; font-size: clamp(0.75rem, 2.2vw, 0.85rem); text-align: center; color: #aaa; }
+
+        /* CEHENNEM KIRMIZISI UYARI EKRANI */
+        #ipad-limit-warning-modal .modal-box { border-color: #ff0000; background: #1a0000; animation: hellPulse 1.2s infinite alternate; }
+        @keyframes hellPulse { from { box-shadow: 0 0 30px #ff0000, 0 0 60px rgba(255,0,0,0.4) inset; } to { box-shadow: 0 0 60px #ff2b2b, 0 0 100px rgba(255,0,0,0.7) inset; } }
+        #ipad-limit-warning-modal h2 { color: #ff0000; text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000; border-bottom: 2px solid #660000; }
+        #ipad-limit-warning-modal p { color: #ff3b3b; font-weight: bold; font-size: 1.3rem; text-shadow: 0 0 6px #ff0000; line-height: 1.6; }
+
+        /* UYARI / YKS EKRANI ÖZEL */
+        #yks-modal .modal-box { border-color: #3498db; background: #001a33; animation: pulse 2s infinite; }
+        #yks-modal h2 { color: #3498db; font-size: 2.5rem; text-shadow: 0 0 20px #3498db; }
+
+        @media (orientation: landscape) and (max-height: 520px) {
+            #hud { top: calc(6px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); padding: 6px 10px; width: clamp(150px, 38vw, 210px); }
+            .hud-line { font-size: 0.7rem; margin-bottom: 3px; }
+            .energy-bar-bg { height: 10px; margin-top: 2px; }
+            #bed { top: 6px; right: 6px; width: clamp(75px, 15vw, 115px); height: clamp(95px, 60vh, 150px); font-size: 0.75rem; }
+            #desk { bottom: 6px; width: clamp(140px, 42vw, 210px); height: clamp(60px, 34vh, 95px); font-size: 0.75rem; padding: 5px; }
+            #kitchen { top: 6px; left: 50%; transform: translateX(-50%); width: clamp(90px, 20vw, 130px); height: clamp(70px, 25vh, 100px); font-size: 0.75rem; }
+            #door { bottom: 6px; right: 6px; width: clamp(90px, 24vw, 130px); height: clamp(70px, 38vh, 100px); font-size: 1rem; }
+            #joystick-zone { bottom: calc(6px + env(safe-area-inset-bottom)); left: calc(6px + env(safe-area-inset-left)); width: clamp(65px, 16vw, 95px); height: clamp(65px, 16vw, 95px); }
+            #interact-btn { bottom: calc(6px + env(safe-area-inset-bottom)); right: calc(6px + env(safe-area-inset-right)); padding: 8px 16px; font-size: 0.85rem; border-width: 3px; }
+            #player { width: clamp(42px, 9vw, 60px); height: clamp(42px, 9vw, 60px); }
+            .kid { width: clamp(30px, 7vw, 42px); height: clamp(30px, 7vw, 42px); font-size: 0.55rem; }
+            .name-tag { font-size: 0.6rem; top: -18px; padding: 2px 6px; }
+            .modal-box { padding: 12px; max-height: 92vh; }
+            .btn { padding: 8px 14px; font-size: 0.85rem; margin: 5px 3px; }
+            #tablet-hint { top: -35px; font-size: 1.1rem; }
+            #ipad-panel { top: calc(6px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); width: clamp(150px, 42vw, 210px); padding: 8px; max-height: 85vh; }
+            #ipad-title { font-size: 0.8rem; margin-bottom: 5px; }
+            #minecraft-screen { height: clamp(55px, 30vh, 95px); }
+            .mc-kid { width: clamp(22px, 6vw, 30px); height: clamp(22px, 6vw, 30px); }
+            #ipad-footer { font-size: 0.65rem; margin-top: 5px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="top-banner">
+        <div id="top-banner-track">
+            <span class="banner-item">🦦🦦🦦 BU OYUN TUĞBA GÜRÜZ'ÜN HAYAT HİKAYESİNDEN UYARLANMIŞTIR! YARATICISI: BERAT ÖZER'DİR 🦦🦦🦦</span>
+            <span class="banner-item">🦦🦦🦦 BU OYUN TUĞBA GÜRÜZ'ÜN HAYAT HİKAYESİNDEN UYARLANMIŞTIR! YARATICISI: BERAT ÖZER'DİR 🦦🦦🦦</span>
+            <span class="banner-item">🦦🦦🦦 BU OYUN TUĞBA GÜRÜZ'ÜN HAYAT HİKAYESİNDEN UYARLANMIŞTIR! YARATICISI: BERAT ÖZER'DİR 🦦🦦🦦</span>
+        </div>
+    </div>
+
+    <div id="game-area">
+        
+        <!-- HUD PANELİ -->
+        <div id="hud">
+            <div class="hud-line">TARİH: <span id="ui-date">01.09.2026</span></div>
+            <div class="hud-line" style="font-size: 1.3rem;">SAAT: <span id="ui-time">00:00</span></div>
+            <div class="hud-line" style="color:#e74c3c; border-bottom: 1px solid #444; padding-bottom: 10px;">YKS'YE: <span id="ui-yks" style="color:#fff;">Hesaplanıyor...</span></div>
+            
+            <div style="margin-top: 15px; font-size: 1rem; font-weight: bold;">ENERJİ: %<span id="ui-energy-text">100</span></div>
+            <div class="energy-bar-bg"><div id="energy-fill"></div></div>
+        </div>
+
+        <!-- ETKİLEŞİM NESNELERİ -->
+        <div id="kitchen" class="game-object">🍳 Mutfak</div>
+        <div id="black-cat" class="game-object hidden"></div>
+
+        <div id="bed" class="game-object">
+            🛏️ Yatak
+            <div id="phone-obj">📱</div>
+        </div>
+        
+        <div id="desk" class="game-object">
+            <div id="milk">🧃 <span id="ui-milk-count">0</span> Süt</div>
+            📚 Çalışma Masası
+        </div>
+
+        <div id="door" class="game-object">🚪 Kapı</div>
+
+        <!-- KARAKTER VE YEĞENLER -->
+        <div id="player"><div id="player-avatar"></div><div class="name-tag">TUĞBA</div><div id="tablet-hint">📲</div></div>
+        
+        <div id="kid1" class="kid">Ertuğrul</div>
+        <div id="kid2" class="kid">Murat</div>
+        <div id="kid3" class="kid">Cihan</div>
+
+        <!-- İPAD / MİNECRAFT PANELİ -->
+        <div id="ipad-panel" class="hidden">
+            <div id="ipad-title">🎮 iPad Verildi - Minecraft Açık</div>
+            <div id="minecraft-screen">
+                <div id="mc-kid-1" class="mc-kid"></div>
+                <div id="mc-kid-2" class="mc-kid"></div>
+                <div id="mc-kid-3" class="mc-kid"></div>
+            </div>
+            <div id="ipad-footer">Yeğenler oyunda oyalanıyor, sen de göz kulak ol 👀</div>
+            <button class="btn btn-red" style="width: 100%; margin-top: 10px; padding: 10px; font-size: 1rem;" onclick="endIpadSession()">İptal Et (Yeğenleri Geri Al)</button>
+        </div>
+
+        <!-- KONTROLLER -->
+        <div id="joystick-zone"><div id="joystick-knob"></div></div>
+        <button id="interact-btn" onclick="executeInteraction()">ETKİLEŞİM (E)</button>
+
+        <!-- ==========================================================================
+             MODALLAR
+             ========================================================================== -->
+             
+        <!-- TELEFON MODALI -->
+        <div id="phone-modal" class="modal-overlay hidden">
+            <div class="modal-box" style="border-color: #bdc3c7;">
+                <h2>📱 Telefon</h2>
+                <button class="btn btn-green" style="width: 100%; padding: 20px; font-size: 1.3rem; margin-bottom: 20px;" onclick="openOrderModal()">📞 MUSTAFA GÜRÜZ'Ü ARA (Erzak Siparişi)</button>
+                <p>Uygulamaya girmek 2 saatini alır, enerjini sömürür.</p>
+                <div class="app-grid">
+                    <button class="app-btn" style="border-color: #ff0050;" onclick="useApp('TikTok')">TikTok</button>
+                    <button class="app-btn" style="border-color: #e1306c;" onclick="useApp('Instagram')">Instagram</button>
+                    <button class="app-btn" style="border-color: #ff0000;" onclick="useApp('YouTube')">YouTube</button>
+                    <button class="app-btn" style="border-color: #fffc00; color: #000;" onclick="useApp('Snapchat')">Snapchat</button>
+                </div>
+                <button class="btn btn-red" style="margin-top: 20px; width: 100%;" onclick="closeModal('phone-modal')">Kapat</button>
+            </div>
+        </div>
+
+        <!-- ERZAK SİPARİŞ MODALI -->
+        <div id="order-modal" class="modal-overlay hidden">
+            <div class="modal-box" style="border-color: #2ecc71;">
+                <h2>📦 Babana Erzak Siparişi Ver</h2>
+                <p style="color:#aaa; font-size:0.9rem;">Siparişin 30 oyun dakikası sonra kapıya gelir. Her bir malzeme siparişi iletişim ve taşıma yorgunluğundan dolayı <b>-5 Enerji</b> götürür.</p>
+                <div class="inv-status">
+                    <div>Süt: <span id="om-sut">0</span></div>
+                    <div>Mantı: <span id="om-manti">0</span></div>
+                    <div>Sarma: <span id="om-sarma">0</span></div>
+                </div>
+                <div class="order-row">
+                    <span>🧃 Çikolatalı Süt (Enerji Verir)</span>
+                    <div>
+                        <button class="btn" style="padding: 5px 15px;" onclick="updateCart('sut', -1)">-</button>
+                        <span id="cart-sut" style="display:inline-block; width: 30px; font-weight:bold;">0</span>
+                        <button class="btn" style="padding: 5px 15px;" onclick="updateCart('sut', 1)">+</button>
+                    </div>
+                </div>
+                <div class="order-row">
+                    <span>🥟 Mantı Malzemesi</span>
+                    <div>
+                        <button class="btn" style="padding: 5px 15px;" onclick="updateCart('manti', -1)">-</button>
+                        <span id="cart-manti" style="display:inline-block; width: 30px; font-weight:bold;">0</span>
+                        <button class="btn" style="padding: 5px 15px;" onclick="updateCart('manti', 1)">+</button>
+                    </div>
+                </div>
+                <div class="order-row">
+                    <span>🍇 Sarma Malzemesi</span>
+                    <div>
+                        <button class="btn" style="padding: 5px 15px;" onclick="updateCart('sarma', -1)">-</button>
+                        <span id="cart-sarma" style="display:inline-block; width: 30px; font-weight:bold;">0</span>
+                        <button class="btn" style="padding: 5px 15px;" onclick="updateCart('sarma', 1)">+</button>
+                    </div>
+                </div>
+                <div style="margin: 15px 0; font-size: 1.2rem; font-weight: bold; color: #e74c3c;">Toplam Gidecek Enerji: <span id="cart-cost">0</span></div>
+                <button class="btn btn-green" style="width: 100%;" onclick="confirmOrder()">Siparişi Ver</button>
+                <button class="btn btn-red" style="width: 100%; margin-top: 10px;" onclick="closeOrderModal()">İptal</button>
+            </div>
+        </div>
+
+        <!-- MUTFAK MODALI -->
+        <div id="kitchen-modal" class="modal-overlay hidden">
+            <div class="modal-box" style="border-color: #f1c40f;">
+                <h2>🍳 Mutfaktasın</h2>
+                <div class="inv-status">
+                    <div>Mantı Malz: <span id="km-manti">0</span></div>
+                    <div>Sarma Malz: <span id="km-sarma">0</span></div>
+                </div>
+                <p>Yemek yapmak azıcık yorar (Enerji gider). Ancak afiyetle yersen çok iyi enerji toplarsın!</p>
+                
+                <button class="btn btn-green" style="width: 100%; padding: 20px; font-size: 1.2rem; margin-bottom:10px;" onclick="cookFood('manti')">🥟 MANTI YAP (Gereken: 1 Mantı Malz.)</button>
+                <button class="btn btn-green" style="width: 100%; padding: 20px; font-size: 1.2rem;" onclick="cookFood('sarma')">🍇 SARMA SAR (Gereken: 1 Sarma Malz.)</button>
+                
+                <button class="btn btn-red" style="margin-top: 20px; width: 100%;" onclick="closeModal('kitchen-modal')">Mutfaktan Çık</button>
+            </div>
+        </div>
+
+        <!-- TYT MATEMATİK MODALI (GERİ EKLENDİ) -->
+        <div id="tyt-modal" class="modal-overlay hidden">
+            <div class="modal-box" style="border-color: #2ecc71; max-width: 800px;">
+                <h2 style="color: #2ecc71;">📚 YKS 2027 - TYT MATEMATİK SİMÜLASYONU</h2>
+                <p style="color: #a29bfe; font-weight: bold;">(Doğru çözersen netin artar ve saat 1 saat ileri sarar. Yanlış çözersen enerjin düşer!)</p>
+                
+                <div id="tyt-question-text">Soru Yükleniyor...</div>
+                
+                <div id="tyt-options-container">
+                    <!-- Butonlar JS ile buraya basılacak -->
+                </div>
+                
+                <button class="btn btn-red" style="margin-top: 20px; width: 100%;" onclick="closeModal('tyt-modal')">Masadan Kalk</button>
+            </div>
+        </div>
+
+        <!-- CEHENNEM KIRMIZISI UYARI MODALI -->
+        <div id="ipad-limit-warning-modal" class="modal-overlay hidden">
+            <div class="modal-box">
+                <h2>🔥 UYARI 🔥</h2>
+                <p>ULAN SALAK GÜNDE SADECE 2 KERE ÇOCUKLARI OYALAYABİLİRSİN HADİ ŞİMDİ ÇOCUKLARLA BİSİKLET SÜR PUHAHAHAHHA</p>
+                <button class="btn" style="background:#c0392b;" onclick="confirmBikeWarning(true)">TAMAM</button>
+                <button class="btn btn-red" onclick="confirmBikeWarning(false)">HAYIR</button>
+            </div>
+        </div>
+
+        <!-- HASTANE -->
+        <div id="hospital-modal" class="modal-overlay hidden">
+            <div class="modal-box" style="border-color: #e74c3c;">
+                <h2 style="color: #e74c3c;">🏥 BAYILDIN!</h2>
+                <p>Enerjin tamamen tükendi, olduğun yerde bayıldın! Seni hastaneye kaldırdılar.</p>
+                <p style="color: #f1c40f; font-weight: bold;">İyileşmen 30 gün sürdü. YKS'ye kalan sürenden 30 gün gitti!</p>
+                <button class="btn btn-red" style="width: 100%;" onclick="recoverFromHospital()">Tamam (Uyan)</button>
+            </div>
+        </div>
+
+        <!-- BURUN AMELİYATI -->
+        <div id="surgery-modal" class="modal-overlay hidden">
+            <div class="modal-box" style="border-color: #9b59b6;">
+                <h2 style="color: #9b59b6;">👃 12 MART: BURUN AMELİYATI!</h2>
+                <p>Beklenen gün geldi! Otomatik olarak burun ameliyatına girdin.</p>
+                <p style="color: #f1c40f; font-weight: bold;">Narkozdan uyanıp iyileşmen tam 7 gün sürdü. YKS maratonuna 1 hafta ara vermek zorunda kaldın.</p>
+                <button class="btn" style="width: 100%; background: #8e44ad;" onclick="recoverFromSurgery()">Bandajları Çıkar ve Devam Et</button>
+            </div>
+        </div>
+
+        <!-- KAPI -->
+        <div id="door-confirm-modal" class="modal-overlay hidden">
+            <div class="modal-box" style="border-color: #8e44ad;">
+                <h2 style="color: #8e44ad;">🚪 Dışarı Çıkmak İster misin?</h2>
+                <button class="btn" onclick="confirmDoor(true)">Evet, Çıkıyorum</button>
+                <button class="btn btn-red" onclick="confirmDoor(false)">Hayır, Vazgeçtim</button>
+            </div>
+        </div>
+
+        <!-- ABLA ESKİ METNİ İLE GERİ GELDİ -->
+        <div id="abla-modal" class="modal-overlay hidden">
+            <div class="modal-box" style="border-color: #e74c3c;">
+                <h2 style="color: #e74c3c;">🚨 ABLAN GELDİ! 🚨</h2>
+                <p>Tam kapıdan çıkıyordun ki ablan belirdi! Ertuğrul, Murat ve Cihan'ı üstüne fırlattı.</p>
+                <p style="color: #f1c40f; font-weight: bold;">Yeğenler peşine takıldı. Tüm gün 12 saatin çöp oldu, enerjin bitti!</p>
+                <button class="btn btn-red" style="width: 100%;" onclick="acceptKids()">Mecbur İlgilen (Çocukları Al)</button>
+            </div>
+        </div>
+
+        <!-- UYKU -->
+        <div id="sleep-modal" class="modal-overlay hidden">
+            <div class="modal-box" style="border-color: #3498db;">
+                <h2 style="color: #3498db;">🌙 Uyku Vakti!</h2>
+                <p id="sleep-desc">Saat gece 00:00 oldu. Gözlerin kapanıyor...</p>
+                <button class="btn" style="width: 100%;" onclick="sleepUntilMorning()">Sabah 09:00'a Kadar Uyu</button>
+                <button id="cancel-sleep-btn" class="btn btn-red hidden" style="width: 100%;" onclick="closeModal('sleep-modal')">Vazgeç (Gündüz Uyuma)</button>
+            </div>
+        </div>
+
+        <!-- YKS ZAMANI (BUG ÇÖZÜLDÜ, BUTONA SIFIRLAMA EKLENDİ) -->
+        <div id="yks-modal" class="modal-overlay hidden">
+            <div class="modal-box">
+                <h2>🎓 YKS GELDİ ÇATTI! 🎓</h2>
+                <p>Büyük gün geldi. Yılların emeği, sarma yemeler, kara kediler, kuduruk yeğenler... Hepsi bugüne hazırlıktı.</p>
+                <p style="color: #2ecc71; font-weight:bold; font-size: 1.4rem; margin-top:20px;">Sınava giriyorsun, başarılar kanka!</p>
+                <button class="btn btn-green" style="width: 100%; margin-top: 20px;" onclick="resetGame()">Simülasyonu Baştan Başlat</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        /* ==========================================================================
+           0. TYT MATEMATİK SORU BANKASI (ESKİ KODDAN GERİ GELDİ)
+           ========================================================================== */
+        const tytSorulari = [
+            { soru: "Bir manavda elma, armut ve muzun kilogram fiyatları sırasıyla 15 TL, 20 TL ve 25 TL'dir. Bu manavdan 2 kg elma, 3 kg armut ve bir miktar muz alan bir müşteri toplam 140 TL ödemiştir. Buna göre müşteri kaç kg muz almıştır?", secenekler: ["1.5", "2", "2.5", "3", "3.5"], cevap: "2" },
+            { soru: "Bir sınıftaki öğrencilerin %40'ı erkektir. Erkeklerin %25'i, kızların ise %20'si gözlüklüdür. Sınıfta gözlüklü öğrenci sayısı 11 olduğuna göre, sınıf mevcudu kaçtır?", secenekler: ["40", "45", "50", "55", "60"], cevap: "50" },
+            { soru: "A ve B şehirleri arası 450 km'dir. A'dan hızı 80 km/sa, B'den hızı 70 km/sa olan iki araç aynı anda birbirlerine doğru yola çıkıyor. Kaç saat sonra karşılaşırlar?", secenekler: ["2.5", "3", "3.5", "4", "4.5"], cevap: "3" },
+            { soru: "2^{x+2} = 32 olduğuna göre, 3^{x-1} ifadesinin değeri kaçtır?", secenekler: ["3", "9", "27", "81", "243"], cevap: "9" },
+            { soru: "Bir işi Ali 12 günde, Veli 24 günde bitirebilmektedir. İkisi birlikte 4 gün çalıştıktan sonra Ali işi bırakıyor. Kalan işi Veli tek başına kaç günde bitirir?", secenekler: ["8", "10", "12", "14", "16"], cevap: "12" },
+            { soru: "Kök içinde (16 - 2√60) ifadesinin eşiti aşağıdakilerden hangisidir?", secenekler: ["√10 - √6", "√8 - √2", "√10 + √6", "√6 - √2", "√5 - √3"], cevap: "√10 - √6" },
+            { soru: "Yaşları ardışık 3 tek sayı olan üç kardeşin yaşları toplamı 45'tir. En büyük kardeşin yaşı kaçtır?", secenekler: ["13", "15", "17", "19", "21"], cevap: "17" }
+        ];
+        let aktifSoruIndex = 0;
+
+        /* ==========================================================================
+           1. OYUN DEĞİŞKENLERİ VE KAYIT SİSTEMİ (OFFLINE DESTEKLİ)
+           ========================================================================== */
+        let gameState = {
+            time: new Date(2026, 8, 1, 0, 0, 0).getTime(), // 1 Eylül 2026
+            energy: 100,
+            kidsPresent: false,
+            ipadActive: false,
+            ipadStartTime: null,
+            ipadChargesLeft: 2,
+            bikeChargesLeft: 1,
+            invSut: 3, 
+            invManti: 0,
+            invSarma: 0,
+            surgeryDone: false, // 12 Mart tetikleyici (Düzeltildi)
+            surgeryRecoveryUntil: 0, // Ameliyattan sonra 30 gün ceza takibi
+            catPresent: false,
+            lastCatDay: "",
+            catBuffEndTime: 0,
+            deliveryPending: false,
+            deliveryTime: 0,
+            yksDone: false
+        };
+
+        const yksTarget = new Date(2027, 5, 19, 10, 0, 0).getTime(); // 19 Haz 2027
+        const surgeryTarget = new Date(2027, 2, 12, 0, 0, 0).getTime(); // 12 Mart 2027
+        let deliveryCart = { sut: 0, manti: 0, sarma: 0 };
+        
+        const savedData = localStorage.getItem('tugbaYksV2Save');
+        const lastRealTime = localStorage.getItem('tugbaLastRealTime');
+        
+        if (savedData) { 
+            gameState = JSON.parse(savedData); 
+            // Eksik değişkenleri tamamla
+            if(typeof gameState.ipadChargesLeft === 'undefined') gameState.ipadChargesLeft = 2;
+            if(typeof gameState.bikeChargesLeft === 'undefined') gameState.bikeChargesLeft = 1;
+            if(typeof gameState.ipadActive === 'undefined') gameState.ipadActive = false;
+            if(typeof gameState.kidsPresent === 'undefined') gameState.kidsPresent = false;
+            if(typeof gameState.ipadStartTime === 'undefined') gameState.ipadStartTime = null;
+
+            if(typeof gameState.invSut === 'undefined') {
+                gameState.invSut = 3; gameState.invManti = 0; gameState.invSarma = 0;
+                gameState.surgeryDone = false; gameState.surgeryRecoveryUntil = 0;
+                gameState.catPresent = false; gameState.lastCatDay = ""; gameState.catBuffEndTime = 0;
+                gameState.deliveryPending = false; gameState.deliveryTime = 0; gameState.yksDone = false;
+            }
+        }
+
+        // Çevrimdışı geçen zamanı yakala
+        if (lastRealTime && !gameState.yksDone) {
+            let nowRealTime = Date.now();
+            let diffRealMs = nowRealTime - parseInt(lastRealTime);
+            let passedGameMinutes = Math.floor(diffRealMs / 1000); 
+            
+            if (passedGameMinutes > 0) {
+                gameState.time += passedGameMinutes * 60000;
+                let energyDrain = passedGameMinutes * 0.05;
+                gameState.energy -= energyDrain;
+                
+                if (gameState.energy <= 0) {
+                    while (gameState.energy <= 0) {
+                        gameState.time += 30 * 24 * 60 * 60 * 1000; 
+                        gameState.energy += 60; 
+                        gameState.kidsPresent = false;
+                        gameState.catPresent = false;
+                        gameState.ipadActive = false;
+                    }
+                }
+            }
+        }
+
+        function saveGame() { 
+            localStorage.setItem('tugbaYksV2Save', JSON.stringify(gameState)); 
+            localStorage.setItem('tugbaLastRealTime', Date.now().toString());
+        }
+
+        /* YKS BUG DÜZELTMESİ (BAŞTAN BAŞLAT BUTONU İÇİN) */
+        function resetGame() {
+            localStorage.removeItem('tugbaYksV2Save');
+            localStorage.removeItem('tugbaLastRealTime');
+            location.reload();
+        }
+
+        /* ==========================================================================
+           ENERJİ MATEMATİĞİ (KARA KEDİ BUFF/DEBUFF SİSTEMİ)
+           ========================================================================== */
+        function changeEnergy(baseAmount) {
+            let finalAmount = baseAmount;
+            if (baseAmount > 0) {
+                if (gameState.catPresent) { finalAmount = baseAmount / 2; } 
+                else if (gameState.time < gameState.catBuffEndTime) { finalAmount = baseAmount * 2; }
+                gameState.energy += finalAmount;
+                if (gameState.energy > 100) gameState.energy = 100;
+            } else if (baseAmount < 0) {
+                if (gameState.catPresent) { finalAmount = baseAmount * 2; } 
+                else if (gameState.time < gameState.catBuffEndTime) { finalAmount = baseAmount / 2; }
+                gameState.energy += finalAmount; 
+                if (gameState.energy < 0) gameState.energy = 0;
+            }
+        }
+
+        /* ==========================================================================
+           3. KARAKTER, HAREKET VE TAKİP (YILAN/SNAKE MANTIĞI) SİSTEMİ
+           ========================================================================== */
+        const playerEl = document.getElementById('player');
+        const playerAvatarEl = document.getElementById('player-avatar');
+        const kids = [document.getElementById('kid1'), document.getElementById('kid2'), document.getElementById('kid3')];
+        const gameArea = document.getElementById('game-area');
+        
+        let player = { x: window.innerWidth / 2, y: window.innerHeight / 2, speed: 8, vx: 0, vy: 0 };
+        const positionHistory = [];
+        
+        // Klavye Tuşları
+        const keys = { w: false, a: false, s: false, d: false };
+        window.addEventListener('keydown', e => {
+            let key = e.key ? e.key.toLowerCase() : ""; let code = e.code || "";
+            if(key === 'w' || code === 'KeyW' || key === 'arrowup') keys.w = true;
+            if(key === 's' || code === 'KeyS' || key === 'arrowdown') keys.s = true;
+            if(key === 'a' || code === 'KeyA' || key === 'arrowleft') keys.a = true;
+            if(key === 'd' || code === 'KeyD' || key === 'arrowright') keys.d = true;
+            if((key === 'e' || code === 'KeyE') && document.getElementById('interact-btn').style.display === 'block') executeInteraction();
+        });
+        window.addEventListener('keyup', e => {
+            let key = e.key ? e.key.toLowerCase() : ""; let code = e.code || "";
+            if(key === 'w' || code === 'KeyW' || key === 'arrowup') keys.w = false;
+            if(key === 's' || code === 'KeyS' || key === 'arrowdown') keys.s = false;
+            if(key === 'a' || code === 'KeyA' || key === 'arrowleft') keys.a = false;
+            if(key === 'd' || code === 'KeyD' || key === 'arrowright') keys.d = false;
+        });
+
+        // MOBİL JOYSTICK
+        const joyZone = document.getElementById('joystick-zone');
+        const joyKnob = document.getElementById('joystick-knob');
+        let joyActive = false; let joyVector = { x: 0, y: 0 };
+
+        joyZone.addEventListener('touchstart', handleJoyStart, {passive: false});
+        joyZone.addEventListener('touchmove', handleJoyMove, {passive: false});
+        joyZone.addEventListener('touchend', handleJoyEnd);
+        joyZone.addEventListener('mousedown', handleJoyStart);
+        window.addEventListener('mousemove', handleJoyMove);
+        window.addEventListener('mouseup', handleJoyEnd);
+
+        function handleJoyStart(e) { if(e.target === joyZone || e.target === joyKnob) { joyActive = true; if(e.type === 'touchstart') e.preventDefault(); } }
+        function handleJoyMove(e) {
+            if(!joyActive) return; e.preventDefault();
+            let clientX = e.touches ? e.touches[0].clientX : e.clientX; let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            let rect = joyZone.getBoundingClientRect(); let centerX = rect.left + rect.width / 2; let centerY = rect.top + rect.height / 2;
+            let dx = clientX - centerX; let dy = clientY - centerY;
+            let distance = Math.hypot(dx, dy); let maxDist = rect.width / 2;
+            if(distance > maxDist) { dx = (dx / distance) * maxDist; dy = (dy / distance) * maxDist; }
+            joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+            joyVector.x = dx / maxDist; joyVector.y = dy / maxDist;
+        }
+        function handleJoyEnd() { joyActive = false; joyKnob.style.transform = `translate(0px, 0px)`; joyVector = { x: 0, y: 0 }; }
+
+        /* ==========================================================================
+           NESNE ETKİLEŞİM VE ÇARPIŞMA (COLLISION) KONTROLÜ
+           ========================================================================== */
+        const objects = [
+            { id: 'kitchen', action: 'Mutfak (Yemek Yap)', target: 'kitchen', el: document.getElementById('kitchen') },
+            { id: 'bed', action: 'Uykuya Dal', target: 'sleep', el: document.getElementById('bed') },
+            { id: 'desk', action: 'Masa (TYT Matematik Çöz)', target: 'desk_study', el: document.getElementById('desk') }, // TYT DÖNDÜ
+            { id: 'milk', action: 'Çikolatalı Süt İç (+Enerji)', target: 'milk_drink', el: document.getElementById('milk') },
+            { id: 'door', action: 'Dışarı Çık', target: 'door', el: document.getElementById('door') },
+            { id: 'phone-obj', action: 'Telefona Bak', target: 'phone', el: document.getElementById('phone-obj') },
+            { id: 'black-cat', action: 'Kıştla! (Kov)', target: 'cat_shoo', el: document.getElementById('black-cat') }
+        ];
+        
+        let currentTarget = null;
+        let hospitalModalShown = false; 
+        const interactBtn = document.getElementById('interact-btn');
+
+        function checkInteractions() {
+            let found = null; let minDist = Infinity;
+            let pRect = playerEl.getBoundingClientRect(); let pCenterX = pRect.left + pRect.width/2; let pCenterY = pRect.top + pRect.height/2;
+
+            for(let obj of objects) {
+                if(obj.id === 'black-cat' && !gameState.catPresent) continue;
+                
+                if(obj.id === 'door' && gameState.deliveryPending && gameState.time >= gameState.deliveryTime) {
+                    obj.action = 'Kargoyu Al (Erzak)';
+                    obj.target = 'door_delivery';
+                } else if (obj.id === 'door') {
+                    obj.action = 'Dışarı Çık'; obj.target = 'door';
+                }
+
+                let oRect = obj.el.getBoundingClientRect(); let oCenterX = oRect.left + oRect.width/2; let oCenterY = oRect.top + oRect.height/2;
+                let dist = Math.hypot(pCenterX - oCenterX, pCenterY - oCenterY);
+                if(dist < 110 && dist < minDist) { minDist = dist; found = obj; }
+            }
+
+            if(!found && gameState.kidsPresent && !gameState.ipadActive) {
+                found = { target: 'give_ipad', action: 'iPad Ver (Minecraft Aç)' };
+            }
+
+            if(found) {
+                currentTarget = found.target; interactBtn.innerText = found.action + " (E)"; interactBtn.style.display = 'block';
+            } else { currentTarget = null; interactBtn.style.display = 'none'; }
+        }
+
+        function executeInteraction() {
+            if(!currentTarget) return;
+            
+            if(currentTarget === 'sleep') {
+                document.getElementById('sleep-desc').innerText = "Yatağa uzandın. İstersen hemen sabah 09:00'a kadar uyuyabilirsin.";
+                document.getElementById('cancel-sleep-btn').classList.remove('hidden');
+                openModal('sleep-modal');
+            }
+            else if(currentTarget === 'phone') { openModal('phone-modal'); }
+            else if(currentTarget === 'door') {
+                if(gameState.kidsPresent) { alert("Yeğenler peşindeyken dışarı çıkamazsın!"); return; }
+                openModal('door-confirm-modal');
+            }
+            else if(currentTarget === 'door_delivery') {
+                gameState.invSut += deliveryCart.sut;
+                gameState.invManti += deliveryCart.manti;
+                gameState.invSarma += deliveryCart.sarma;
+                gameState.deliveryPending = false;
+                deliveryCart = { sut:0, manti:0, sarma:0 };
+                alert("Babam kapıya malzemeleri bırakmış, mis! Erzaklar dolaba eklendi.");
+                updateUI(); saveGame();
+            }
+            else if(currentTarget === 'kitchen') { 
+                document.getElementById('km-manti').innerText = gameState.invManti;
+                document.getElementById('km-sarma').innerText = gameState.invSarma;
+                openModal('kitchen-modal'); 
+            }
+            else if(currentTarget === 'give_ipad') { giveIpad(); } 
+            else if(currentTarget === 'cat_shoo') {
+                gameState.catPresent = false;
+                gameState.catBuffEndTime = gameState.time + 30 * 60000; 
+                document.getElementById('black-cat').classList.add('hidden');
+                alert("Kara kediyi kıştladın! Sonraki 30 oyun dakikası boyunca harcadığın enerji yarıya düşecek, kazandığın enerji 2'ye katlanacak. AMA bu süreçte telefona bakmak yasak!");
+                updateUI(); saveGame();
+            }
+            else if(currentTarget === 'milk_drink') {
+                if(gameState.invSut <= 0) { alert("Hiç çikolatalı sütün kalmamış kanka! Telefondan babanı ara da getirsin."); return; }
+                gameState.invSut -= 1;
+                if(gameState.kidsPresent) {
+                    changeEnergy(15); 
+                    alert("Yeğenler de süte üşüştü! Yarısını onlar içti. (+Enerji)");
+                } else {
+                    changeEnergy(30);
+                    alert("Çikolatalı Süt içildi! Enerji yükseldi.");
+                }
+                updateUI(); saveGame();
+            }
+            else if(currentTarget === 'desk_study') { 
+                if(gameState.kidsPresent) { alert("Yeğenler evdeyken ders çalışamazsın! Önce onları hallet (iPad ver ya da uyu)."); return; }
+                
+                // 30 GÜN AMELİYAT CEZASI BURADA İŞLİYOR
+                if(gameState.time < gameState.surgeryRecoveryUntil) { 
+                    alert("Burnun bandajlı kanka, kafanı eğip soru çözemezsin! Ameliyattan sonra 30 gün boyunca ders çalışmak yasak."); 
+                    return; 
+                }
+                
+                startTYT(); 
+            }
+        }
+
+        /* ==========================================================================
+           ANA OYUN DÖNGÜSÜ (GAME LOOP)
+           ========================================================================== */
+        function gameLoop() {
+            player.vx = 0; player.vy = 0;
+            if(keys.w) player.vy = -player.speed; if(keys.s) player.vy = player.speed; if(keys.a) player.vx = -player.speed; if(keys.d) player.vx = player.speed;
+            if(joyActive) { player.vx = joyVector.x * player.speed; player.vy = joyVector.y * player.speed; }
+
+            if(player.vx !== 0 || player.vy !== 0) {
+                player.x += player.vx; player.y += player.vy;
+                let pw = playerEl.offsetWidth; let ph = playerEl.offsetHeight;
+                if(player.x < 0) player.x = 0; if(player.y < 0) player.y = 0;
+                if(player.x > window.innerWidth - pw) player.x = window.innerWidth - pw;
+                if(player.y > window.innerHeight - ph) player.y = window.innerHeight - ph;
+
+                playerEl.style.left = player.x + 'px'; playerEl.style.top = player.y + 'px';
+                if(player.vx < 0) playerAvatarEl.style.transform = 'scaleX(-1)'; else if(player.vx > 0) playerAvatarEl.style.transform = 'scaleX(1)';
+
+                positionHistory.unshift({ x: player.x, y: player.y });
+                if(positionHistory.length > 50) positionHistory.pop(); 
+                
+                if(gameState.kidsPresent && !gameState.ipadActive) {
+                    if(positionHistory[10]) { kids[0].style.left = positionHistory[10].x + 'px'; kids[0].style.top = positionHistory[10].y + 'px'; }
+                    if(positionHistory[20]) { kids[1].style.left = positionHistory[20].x + 'px'; kids[1].style.top = positionHistory[20].y + 'px'; }
+                    if(positionHistory[30]) { kids[2].style.left = positionHistory[30].x + 'px'; kids[2].style.top = positionHistory[30].y + 'px'; }
+                }
+            }
+            checkInteractions(); requestAnimationFrame(gameLoop);
+        }
+        playerEl.style.left = player.x + 'px'; playerEl.style.top = player.y + 'px';
+        gameLoop();
+
+        /* ==========================================================================
+           ZAMAN VE OLAY TETİKLEYİCİLERİ
+           ========================================================================== */
+        setInterval(() => {
+            if (gameState.yksDone) return;
+            
+            gameState.time += 60000; 
+            changeEnergy(-0.05); 
+
+            if(gameState.energy <= 0 && !hospitalModalShown) { hospitalModalShown = true; openModal('hospital-modal'); }
+
+            if(gameState.kidsPresent && gameState.ipadActive && gameState.ipadStartTime) {
+                if(gameState.time - gameState.ipadStartTime >= 30 * 60000) {
+                    endIpadSession();
+                }
+            }
+            
+            // YKS BİTİŞ KONTROLÜ
+            if (gameState.time >= yksTarget && !gameState.yksDone) {
+                gameState.yksDone = true;
+                openModal('yks-modal');
+                return;
+            }
+
+            // 12 MART BURUN AMELİYATI (DÜZELTİLDİ: Çevrimdışı atlansa bile tetikler)
+            if (gameState.time >= surgeryTarget && !gameState.surgeryDone) {
+                gameState.surgeryDone = true;
+                // Ameliyattan sonra 30 günlük çalışma yasağı
+                gameState.surgeryRecoveryUntil = gameState.time + (30 * 24 * 60 * 60 * 1000); 
+                openModal('surgery-modal');
+            }
+
+            let current = new Date(gameState.time);
+
+            // AKŞAM 18:00 KARA KEDİ
+            let dayStr = current.toLocaleDateString();
+            if (current.getHours() === 18 && current.getMinutes() === 0 && gameState.lastCatDay !== dayStr) {
+                gameState.lastCatDay = dayStr;
+                gameState.catPresent = true;
+                alert("Mutfak kapısında meşhur Kara Kedi belirdi! Hemen kıştlamazsan harcadığın tüm enerjiler 2'ye katlanacak.");
+            }
+
+            // Gece 00:00 zorunlu uyku
+            if(current.getHours() === 0 && current.getMinutes() === 0) {
+                document.getElementById('sleep-desc').innerText = "Saat gece 00:00 oldu. YKS tayfası uyumaz ama senin gözler gidiyor. Uyu!";
+                document.getElementById('cancel-sleep-btn').classList.add('hidden'); 
+                openModal('sleep-modal');
+            }
+
+            updateUI(); saveGame();
+        }, 1000);
+
+        function updateUI() {
+            let d = new Date(gameState.time);
+            document.getElementById('ui-date').innerText = d.toLocaleDateString('tr-TR');
+            document.getElementById('ui-time').innerText = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+
+            let diff = yksTarget - gameState.time;
+            if(diff > 0) {
+                let days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                let hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                document.getElementById('ui-yks').innerText = `${days} Gün ${hours} Saat`;
+            }
+
+            let e = Math.floor(gameState.energy);
+            document.getElementById('ui-energy-text').innerText = e;
+            const fill = document.getElementById('energy-fill');
+            fill.style.width = e + '%';
+            fill.style.background = e < 30 ? '#e74c3c' : (e < 60 ? '#f1c40f' : '#2ecc71');
+
+            document.getElementById('ui-milk-count').innerText = gameState.invSut;
+            document.getElementById('black-cat').classList.toggle('hidden', !gameState.catPresent);
+            
+            document.getElementById('tablet-hint').style.display = (gameState.kidsPresent && !gameState.ipadActive) ? 'block' : 'none';
+            kids.forEach(k => k.style.display = (gameState.kidsPresent && !gameState.ipadActive) ? 'flex' : 'none');
+            document.getElementById('ipad-panel').classList.toggle('hidden', !(gameState.kidsPresent && gameState.ipadActive));
+        }
+
+        /* ==========================================================================
+           MODAL AKSİYONLARI VE ÖZEL MEKANİKLER
+           ========================================================================== */
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        // Hastane (30 gün)
+        function recoverFromHospital() {
+            closeModal('hospital-modal');
+            gameState.time += 30 * 24 * 60 * 60 * 1000;
+            gameState.energy = 60; gameState.kidsPresent = false; gameState.catPresent = false;
+            gameState.ipadActive = false; gameState.ipadStartTime = null;
+            gameState.ipadChargesLeft = 2; gameState.bikeChargesLeft = 1;
+            positionHistory.length = 0;
+            hospitalModalShown = false;
+            alert("Hastaneden 30 gün sonra çıktın. YKS takviminden koca bir ay uçtu gitti!");
+            updateUI(); saveGame();
+        }
+
+        // Ameliyat (7 gün geçiyor, ama 30 günlük çalışma cezası arkada hesaplanıyor)
+        function recoverFromSurgery() {
+            closeModal('surgery-modal');
+            gameState.time += 7 * 24 * 60 * 60 * 1000;
+            gameState.energy = 100; gameState.kidsPresent = false; gameState.catPresent = false;
+            gameState.ipadActive = false; gameState.ipadStartTime = null;
+            alert("Yeni burnunla uyandın, geçmiş olsun. 7 gün geride kaldı. Unutma, bandajlardan dolayı tam 30 gün boyunca kafanı eğip ders çalışamazsın!");
+            updateUI(); saveGame();
+        }
+
+        // Uyku
+        function sleepUntilMorning() {
+            closeModal('sleep-modal');
+            let kidsWereHome = gameState.kidsPresent;
+            let d = new Date(gameState.time);
+            if(d.getHours() >= 0 && d.getHours() < 9) d.setHours(9, 0, 0, 0); else { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); }
+            
+            gameState.time = d.getTime(); gameState.energy = 100;
+            gameState.kidsPresent = false; gameState.catPresent = false; 
+            gameState.ipadActive = false; gameState.ipadStartTime = null;
+            gameState.ipadChargesLeft = 2; gameState.bikeChargesLeft = 1; 
+            positionHistory.length = 0; 
+            
+            let mesaj = kidsWereHome
+                ? "Mışıl mışıl uyudun, enerji %100! (Yeğenler evlerine döndü)"
+                : "Mışıl mışıl uyudun, enerji %100!";
+            alert(mesaj);
+            updateUI(); saveGame();
+        }
+
+        // Telefon & Uygulamalar
+        function useApp(app) {
+            if (gameState.time < gameState.catBuffEndTime) {
+                alert("Kara kediyi yeni kovdun kanka! Önündeki 30 (oyun) dakikası boyunca telefona bakamazsın, ritmini bozma!");
+                return;
+            }
+            gameState.time += 2 * 60 * 60 * 1000;
+            changeEnergy(-15);
+            closeModal('phone-modal');
+            alert(`${app} batağında kayboldun kanka. 2 saatin çöp oldu!`);
+            updateUI(); saveGame();
+        }
+
+        // Erzak Siparişi
+        let tempCart = { sut: 0, manti: 0, sarma: 0 };
+        function openOrderModal() {
+            if (gameState.time < gameState.catBuffEndTime) {
+                alert("Telefona dokunman şimdilik yasak! (Kedi buffı aktif)"); return;
+            }
+            tempCart = { sut: 0, manti: 0, sarma: 0 };
+            document.getElementById('om-sut').innerText = gameState.invSut;
+            document.getElementById('om-manti').innerText = gameState.invManti;
+            document.getElementById('om-sarma').innerText = gameState.invSarma;
+            updateCartUI();
+            closeModal('phone-modal');
+            openModal('order-modal');
+        }
+        function closeOrderModal() { closeModal('order-modal'); }
+        function updateCart(item, amt) {
+            tempCart[item] += amt;
+            if(tempCart[item] < 0) tempCart[item] = 0;
+            updateCartUI();
+        }
+        function updateCartUI() {
+            document.getElementById('cart-sut').innerText = tempCart.sut;
+            document.getElementById('cart-manti').innerText = tempCart.manti;
+            document.getElementById('cart-sarma').innerText = tempCart.sarma;
+            let cost = (tempCart.sut + tempCart.manti + tempCart.sarma) * 5;
+            document.getElementById('cart-cost').innerText = cost;
+        }
+        function confirmOrder() {
+            let totalCost = (tempCart.sut + tempCart.manti + tempCart.sarma) * 5;
+            if(totalCost === 0) { alert("Sepet boş kanka."); return; }
+            
+            changeEnergy(-totalCost); 
+            deliveryCart = { sut: tempCart.sut, manti: tempCart.manti, sarma: tempCart.sarma };
+            
+            gameState.deliveryTime = gameState.time + 30 * 60000; 
+            gameState.deliveryPending = true;
+            
+            closeOrderModal();
+            alert("Babanı aradın, siparişleri verdin. Telefon yorgunluğundan enerjin biraz düştü. Malzemeler 30 dk sonra kapıda olacak!");
+            updateUI(); saveGame();
+        }
+
+        // Mutfakta Yemek (GİZLİ YEĞEN MEKANİĞİ)
+        function cookFood(type) {
+            if (type === 'manti' && gameState.invManti < 1) { alert("Mantı malzemen bitmiş kanka. Babandan sipariş et."); return; }
+            if (type === 'sarma' && gameState.invSarma < 1) { alert("Sarma malzemen bitmiş kanka. Babandan sipariş et."); return; }
+            
+            if (type === 'manti') gameState.invManti--;
+            if (type === 'sarma') gameState.invSarma--;
+            document.getElementById('km-manti').innerText = gameState.invManti;
+            document.getElementById('km-sarma').innerText = gameState.invSarma;
+            
+            changeEnergy(-5);
+            gameState.time += 60 * 60000; 
+            
+            if (gameState.kidsPresent) {
+                alert("Yemeği yaptın ama o da ne! Yeğenler yemeğin üstüne çullandı. Sen sadece yorulduğunla kaldın (+0 Enerji).");
+            } else {
+                changeEnergy(40); 
+                alert("Ellerine sağlık! Yemeği lüplettin ve muazzam enerji topladın.");
+            }
+            updateUI(); saveGame();
+        }
+
+        // Dışarı ve Yeğenler (Eski Ablan Fırlattı Metni Geri Döndü)
+        function confirmDoor(cikacakMi) { closeModal('door-confirm-modal'); if(cikacakMi) openModal('abla-modal'); }
+        function acceptKids() {
+            closeModal('abla-modal');
+            gameState.kidsPresent = true;
+            gameState.ipadActive = false;
+            gameState.ipadStartTime = null;
+            gameState.time += 12 * 60 * 60 * 1000;
+            changeEnergy(-30);
+            positionHistory.length = 0; for(let i=0; i<40; i++) positionHistory.push({x: player.x, y: player.y});
+            alert("Ertuğrul, Murat ve Cihan peşinde! Tam 12 saatin çöp oldu, enerjin vakumlandı.");
+            updateUI(); saveGame();
+        }
+
+        // İPAD MEKANİKLERİ
+        function giveIpad() {
+            if(gameState.ipadChargesLeft <= 0) {
+                openModal('ipad-limit-warning-modal');
+                return;
+            }
+            gameState.ipadChargesLeft -= 1;
+            gameState.ipadActive = true;
+            gameState.ipadStartTime = gameState.time;
+            positionHistory.length = 0; 
+            document.getElementById('ipad-panel').classList.remove('hidden');
+            alert("Yeğenlerin eline iPad'i tutuşturdun, Minecraft açtın.");
+            updateUI(); saveGame();
+        }
+
+        function confirmBikeWarning(kabulEttiMi) {
+            closeModal('ipad-limit-warning-modal');
+            if(kabulEttiMi) { startBikeRide(); }
+        }
+
+        function startBikeRide() {
+            if(gameState.bikeChargesLeft <= 0) {
+                alert("Bugünkü bisiklet hakkın da bitti! Başka çıkış yolu yok, yatana kadar eve hapissin.");
+                return;
+            }
+            gameState.bikeChargesLeft -= 1;
+            gameState.time += 30 * 60 * 1000; 
+            changeEnergy(-15);
+            alert("Yeğenlerle bisiklete bindin, yarım saat onları dışarıda gezdirdin. Eve döndünüz, hâlâ yanındalar.");
+            updateUI(); saveGame();
+        }
+
+        function endIpadSession() {
+            gameState.ipadActive = false;
+            gameState.ipadStartTime = null;
+            document.getElementById('ipad-panel').classList.add('hidden');
+            positionHistory.length = 0;
+            for(let i=0; i<40; i++) positionHistory.push({x: player.x, y: player.y});
+            alert("Minecraft süresi bitti! iPad'i bıraktılar ve yine peşine düştüler.");
+            updateUI(); saveGame();
+        }
+
+        /* ==========================================================================
+           TYT MATEMATİK FONKSİYONLARI (GERİ GELDİ)
+           ========================================================================== */
+        function startTYT() {
+            openModal('tyt-modal');
+            soruGetir();
+        }
+
+        function soruGetir() {
+            aktifSoruIndex = Math.floor(Math.random() * tytSorulari.length);
+            const soruData = tytSorulari[aktifSoruIndex];
+            
+            document.getElementById('tyt-question-text').innerText = soruData.soru;
+            
+            const optionsContainer = document.getElementById('tyt-options-container');
+            optionsContainer.innerHTML = ""; 
+            
+            soruData.secenekler.forEach(secenek => {
+                let btn = document.createElement('button');
+                btn.className = "tyt-option";
+                btn.innerText = secenek;
+                btn.onclick = () => cevapKontrol(secenek, soruData.cevap);
+                optionsContainer.appendChild(btn);
+            });
+        }
+
+        function cevapKontrol(verilenCevap, dogruCevap) {
+            if(verilenCevap === dogruCevap) {
+                alert("DOĞRU KANKA! Bir soru daha bitti, motive oldun. 1 saat su gibi aktı.");
+                gameState.time += 60 * 60 * 1000; 
+            } else {
+                alert(`YANLIŞ! Doğru Cevap: ${dogruCevap}. Zihnini fazla zorladın, enerji düştü.`);
+                changeEnergy(-10);
+                gameState.time += 30 * 60 * 1000; 
+            }
+            updateUI(); saveGame();
+            
+            let devam = confirm("Helal, masadan kalkmak ister misin yoksa test çözmeye devam mı?");
+            if(!devam) { soruGetir(); } 
+            else { closeModal('tyt-modal'); }
+        }
+
+        updateUI();
+    </script>
+</body>
+</html>
+
 
